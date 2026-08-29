@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://syncropy.com/sitemap.xml
