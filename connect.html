@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Connect | SYNCROPY.COM</title>
+<style>
+  :root {
+    --bg-dark: #050505;
+    --glass-bg: rgba(20, 20, 20, 0.5);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --text-primary: #f0f0f0;
+    --text-muted: #888;
+    --accent: #00ffcc;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background-color: var(--bg-dark);
+    background-image: radial-gradient(circle at 50% 20%, #161616 0%, #000 100%);
+    color: var(--text-primary);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: 40px 20px;
+  }
+  a { color: var(--accent); }
+  .wrap { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 2rem; letter-spacing: -0.03em; margin-bottom: 4px; }
+  .sub { color: var(--text-muted); margin-bottom: 28px; font-size: 0.95rem; line-height: 1.5; }
+  .panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(16px);
+    border: 1px solid var(--glass-border);
+    border-radius: 16px;
+    padding: 28px;
+    margin-bottom: 20px;
+  }
+  .tabs { display: flex; gap: 10px; margin-bottom: 20px; }
+  .tab {
+    flex: 1;
+    padding: 12px;
+    text-align: center;
+    border-radius: 10px;
+    border: 1px solid var(--glass-border);
+    cursor: pointer;
+    color: var(--text-muted);
+    font-size: 0.9rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+  .tab.active { color: var(--bg-dark); background: var(--accent); border-color: var(--accent); font-weight: 600; }
+  button {
+    background: var(--accent);
+    color: #002019;
+    border: none;
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.95rem;
+  }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  input[type=text] {
+    width: 100%;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--glass-border);
+    background: rgba(0,0,0,0.4);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    margin-bottom: 12px;
+  }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .status { font-size: 0.85rem; color: var(--text-muted); margin-top: 10px; }
+  .status.live { color: var(--accent); }
+  .code-box {
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    background: rgba(0,0,0,0.45);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    padding: 12px 14px;
+    word-break: break-all;
+    font-size: 0.85rem;
+    margin-bottom: 10px;
+  }
+  video {
+    width: 100%;
+    border-radius: 12px;
+    background: #000;
+    margin-top: 16px;
+    display: none;
+  }
+  .hidden { display: none !important; }
+  .note { font-size: 0.8rem; color: var(--text-muted); margin-top: 18px; line-height: 1.5; }
+  footer { text-align: center; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SYNCROPY connect</h1>
+  <p class="sub">Zero-trust screen pairing: two browsers exchange a WebRTC handshake through Syncropy's relay,
+    then stream directly, peer-to-peer. The relay only ever sees signaling messages, never your screen.</p>
+
+  <div class="panel">
+    <div class="tabs">
+      <div class="tab active" id="tab-host" onclick="selectMode('host')">Share my screen</div>
+      <div class="tab" id="tab-view" onclick="selectMode('view')">Watch a share</div>
+    </div>
+
+    <div id="host-panel">
+      <p class="status" id="host-hint">Click start, then send the room code below to whoever you want watching.</p>
+      <button id="host-start" onclick="startHost()">Start sharing</button>
+      <div id="host-code-wrap" class="hidden" style="margin-top:16px;">
+        <div class="code-box" id="host-code"></div>
+        <div class="row">
+          <button onclick="copyCode()">Copy code</button>
+          <span class="status" id="host-status">waiting for viewer…</span>
+        </div>
+      </div>
+      <video id="host-preview" playsinline autoplay muted></video>
+    </div>
+
+    <div id="view-panel" class="hidden">
+      <p class="status">Paste the room code you were given, then connect.</p>
+      <input type="text" id="view-code" placeholder="room code">
+      <div class="row">
+        <button id="view-connect" onclick="startViewer()">Connect</button>
+        <span class="status" id="view-status"></span>
+      </div>
+      <video id="view-video" playsinline autoplay></video>
+    </div>
+  </div>
+
+  <p class="note">
+    This is a real, working MVP pairing tool built on Syncropy's live relay
+    (<code>syncropy-relay.johnmobley99.workers.dev</code>) — not a mockup. It handles the core
+    "connect two devices" loop; full remote *control* (keyboard/mouse input relay) is a later step,
+    not part of this pass. ICE candidate discovery uses a public STUN server (Google's) for NAT
+    traversal — the relay itself never touches your screen, and once peers connect, media flows
+    directly between browsers.
+  </p>
+
+  <footer><a href="index.html">&larr; back to syncropy.com</a></footer>
+</div>
+
+<script>
+const RELAY_HOST = "syncropy-relay.johnmobley99.workers.dev";
+const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
+
+function selectMode(mode) {
+  document.getElementById('tab-host').classList.toggle('active', mode === 'host');
+  document.getElementById('tab-view').classList.toggle('active', mode === 'view');
+  document.getElementById('host-panel').classList.toggle('hidden', mode !== 'host');
+  document.getElementById('view-panel').classList.toggle('hidden', mode !== 'view');
+}
+
+function pairSocket(room, role) {
+  return new WebSocket(`wss://${RELAY_HOST}/pair/${room}?role=${role}`);
+}
+
+let currentRoom = null;
+
+function copyCode() {
+  if (!currentRoom) return;
+  navigator.clipboard.writeText(currentRoom).catch(() => {});
+}
+
+async function startHost() {
+  const btn = document.getElementById('host-start');
+  btn.disabled = true;
+  const statusEl = document.getElementById('host-status');
+  const codeWrap = document.getElementById('host-code-wrap');
+  const preview = document.getElementById('host-preview');
+
+  let localStream;
+  try {
+    localStream = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+  } catch (err) {
+    document.getElementById('host-hint').textContent = 'Screen share permission denied or unsupported in this browser: ' + err.message;
+    btn.disabled = false;
+    return;
+  }
+
+  preview.srcObject = localStream;
+  preview.style.display = 'block';
+
+  currentRoom = crypto.randomUUID();
+  document.getElementById('host-code').textContent = currentRoom;
+  codeWrap.classList.remove('hidden');
+
+  const ws = pairSocket(currentRoom, 'host');
+  let pc = null;
+  let offered = false;
+
+  async function makeOfferOnce() {
+    if (offered) return;
+    offered = true;
+    pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+    localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    pc.onicecandidate = (e) => {
+      if (e.candidate) ws.send(JSON.stringify({ type: 'ice', candidate: e.candidate }));
+    };
+    pc.onconnectionstatechange = () => {
+      statusEl.textContent = 'peer connection: ' + pc.connectionState;
+      statusEl.classList.toggle('live', pc.connectionState === 'connected');
+    };
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    ws.send(JSON.stringify({ type: 'offer', sdp: offer }));
+  }
+
+  ws.addEventListener('message', async (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === 'joined') {
+      statusEl.textContent = msg.peerPresent ? 'viewer already waiting…' : 'waiting for viewer…';
+      if (msg.peerPresent) await makeOfferOnce();
+    } else if (msg.type === 'peer-joined') {
+      statusEl.textContent = 'viewer joined, connecting…';
+      await makeOfferOnce();
+    } else if (msg.type === 'answer' && pc) {
+      await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+    } else if (msg.type === 'ice' && pc) {
+      try { await pc.addIceCandidate(msg.candidate); } catch (e) {}
+    } else if (msg.type === 'peer-left') {
+      statusEl.textContent = 'viewer disconnected';
+      statusEl.classList.remove('live');
+      offered = false;
+      if (pc) { pc.close(); pc = null; }
+    }
+  });
+
+  ws.addEventListener('close', () => {
+    statusEl.textContent = 'relay connection closed';
+    statusEl.classList.remove('live');
+  });
+}
+
+async function startViewer() {
+  const room = document.getElementById('view-code').value.trim();
+  const statusEl = document.getElementById('view-status');
+  const video = document.getElementById('view-video');
+  if (!room) { statusEl.textContent = 'enter a room code first'; return; }
+  if (room.length < 20) { statusEl.textContent = 'that code looks too short to be valid'; return; }
+
+  document.getElementById('view-connect').disabled = true;
+  statusEl.textContent = 'connecting…';
+
+  const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  pc.ontrack = (e) => {
+    video.srcObject = e.streams[0];
+    video.style.display = 'block';
+  };
+  pc.onconnectionstatechange = () => {
+    statusEl.textContent = 'peer connection: ' + pc.connectionState;
+    statusEl.classList.toggle('live', pc.connectionState === 'connected');
+  };
+
+  const ws = pairSocket(room, 'viewer');
+  ws.addEventListener('message', async (event) => {
+    const msg = JSON.parse(event.data);
+    if (msg.type === 'offer') {
+      await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      ws.send(JSON.stringify({ type: 'answer', sdp: answer }));
+    } else if (msg.type === 'ice') {
+      try { await pc.addIceCandidate(msg.candidate); } catch (e) {}
+    } else if (msg.type === 'peer-left') {
+      statusEl.textContent = 'host disconnected';
+      statusEl.classList.remove('live');
+    }
+  });
+  ws.addEventListener('close', () => {
+    if (!statusEl.textContent.startsWith('peer connection: connected')) {
+      statusEl.textContent = 'relay connection closed';
+    }
+  });
+  pc.oniceconnectionstatechange = () => {};
+  ws.addEventListener('open', () => { statusEl.textContent = 'connected to relay, waiting for host…'; });
+}
+</script>
+</body>
+</html>
