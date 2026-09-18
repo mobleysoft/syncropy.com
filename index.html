@@ -95,21 +95,6 @@
     </style>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 
-    <!-- MASCOM_ANALYTICS_CORTEX -->
-    <script>
-        (function() {
-            try {
-                const payload = {
-                    node: "syncropy.com",
-                    timestamp: new Date().toISOString(),
-                    vector: window.location.pathname,
-                    agent: navigator.userAgent
-                };
-                navigator.sendBeacon("http://127.0.0.1:8889/track", JSON.stringify(payload));
-            } catch(e) {}
-        })();
-    </script>
-    
 </head>
 <body>
     <div id="canvas-container"></div>
@@ -117,27 +102,18 @@
     <div class="glass-panel">
         <div style="display: flex; align-items: center; margin-bottom: 20px;">
             <div class="status-dot"></div>
-            <span style="color: var(--text-muted); font-size: 0.9rem; letter-spacing: 0.1em; text-transform: uppercase;">SOVEREIGN NODE ACTIVE</span>
+            <span style="color: var(--text-muted); font-size: 0.9rem; letter-spacing: 0.1em; text-transform: uppercase;">Zero-trust remote desktop</span>
         </div>
         <h1>SYNCROPY.COM</h1>
         <p style="color: var(--text-muted); font-size: 1.1rem; line-height: 1.6; max-width: 600px;">
-            Premium, enigmatic, hyper-modern. Physical environment protocol: cyber_grid.
+            A lighter, per-seat alternative to TeamViewer/AnyDesk for IT support and remote-work
+            screen sharing. No server-side secret, no stored screen content &mdash; the relay only
+            ever passes signaling messages, media flows peer-to-peer once two devices pair.
         </p>
-        
-        <div class="metrics">
-            <div class="metric-card">
-                <div class="metric-value">99.9%</div>
-                <div class="metric-label">Neural Coherence</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value">0ms</div>
-                <div class="metric-label">API Latency</div>
-            </div>
-            <div class="metric-card">
-                <div class="metric-value">LOCAL</div>
-                <div class="metric-label">Execution Vector</div>
-            </div>
-        </div>
+
+        <p style="margin-top: 30px;">
+            <a href="connect.html" style="display: inline-block; padding: 12px 24px; background: #00ffcc; color: #002019; border-radius: 10px; font-weight: 600; text-decoration: none;">Try the live screen-pairing demo &rarr;</a>
+        </p>
     </div>
 
     <script>
