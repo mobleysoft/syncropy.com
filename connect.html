@@ -114,6 +114,7 @@
         <div class="code-box" id="host-code"></div>
         <div class="row">
           <button onclick="copyCode()">Copy code</button>
+          <button onclick="copyLink()">Copy link</button>
           <span class="status" id="host-status">waiting for viewer…</span>
         </div>
       </div>
@@ -134,10 +135,14 @@
   <p class="note">
     This is a real, working MVP pairing tool built on Syncropy's live relay
     (<code>syncropy-relay.johnmobley99.workers.dev</code>) — not a mockup. It handles the core
-    "connect two devices" loop; full remote *control* (keyboard/mouse input relay) is a later step,
-    not part of this pass. ICE candidate discovery uses a public STUN server (Google's) for NAT
-    traversal — the relay itself never touches your screen, and once peers connect, media flows
-    directly between browsers.
+    "connect two devices" loop, including a shareable link (<code>?room=</code>) that auto-connects
+    the viewer side, not just a code to retype; full remote *control* (keyboard/mouse input relay) is
+    a later step, not part of this pass. ICE candidate discovery uses two public STUN servers
+    (Cloudflare's and Google's) for NAT traversal redundancy — the relay itself never touches your
+    screen, and once peers connect, media flows directly between browsers. Known honest limitation:
+    there is no TURN relay fallback yet, so pairing across two strict/symmetric NATs (common on
+    locked-down corporate networks — this venture's actual target customer) can still fail to find a
+    direct path; a TURN server is the real fix and hasn't been built.
   </p>
 
   <footer><a href="index.html">&larr; back to syncropy.com</a></footer>
@@ -145,7 +150,10 @@
 
 <script>
 const RELAY_HOST = "syncropy-relay.johnmobley99.workers.dev";
-const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
+const ICE_SERVERS = [
+  { urls: "stun:stun.cloudflare.com:3478" },
+  { urls: "stun:stun.l.google.com:19302" },
+];
 
 function selectMode(mode) {
   document.getElementById('tab-host').classList.toggle('active', mode === 'host');
@@ -163,6 +171,12 @@ let currentRoom = null;
 function copyCode() {
   if (!currentRoom) return;
   navigator.clipboard.writeText(currentRoom).catch(() => {});
+}
+
+function copyLink() {
+  if (!currentRoom) return;
+  const link = `${location.origin}${location.pathname}?room=${currentRoom}`;
+  navigator.clipboard.writeText(link).catch(() => {});
 }
 
 async function startHost() {
@@ -278,6 +292,18 @@ async function startViewer() {
   pc.oniceconnectionstatechange = () => {};
   ws.addEventListener('open', () => { statusEl.textContent = 'connected to relay, waiting for host…'; });
 }
+
+// A shareable /connect.html?room=<code> link is the real replacement for
+// manually retyping a 36-character UUID - land straight on the viewer tab,
+// pre-filled and already connecting, instead of asking the recipient to
+// copy/paste a code by hand.
+(function autoConnectFromLink() {
+  const room = new URLSearchParams(location.search).get('room');
+  if (!room || room.length < 20) return;
+  selectMode('view');
+  document.getElementById('view-code').value = room;
+  startViewer();
+})();
 </script>
 </body>
 </html>
