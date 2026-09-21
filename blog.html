@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SYNCROPY.COM | INSIGHTS</title>
+    <title>SYNCROPY.COM | Notes</title>
     <style>
         body {
             margin: 0; padding: 40px; background-color: #050505; color: #f0f0f0;
@@ -17,16 +17,31 @@
         }
         h2 { font-size: 1.5rem; margin-top: 0; color: #fff; }
         .meta { font-size: 0.8rem; color: #888; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 20px; }
+        a { color: #00ffcc; }
     </style>
 </head>
 <body>
-    <h1>SYNCROPY.COM // INTELLIGENCE CORTEX</h1>
-    
+    <h1>SYNCROPY.COM // Notes</h1>
+
     <div class="article">
-        <h2>The Physical Manifestation of Premium, enigmatic, hyper-modern Architecture</h2>
-        <div class="meta">SYSTEM GENERATED // AUTOPOIESIS PHASE 4</div>
-        <p>The biological bottleneck has been eradicated. The execution of Sovereign architecture requires zero rented API calls. We own the metal. We own the physics.</p>
-        <p>This is a mathematically verified truth standard injected by the Fecundity Loom.</p>
+        <h2>Why the relay never touches your screen</h2>
+        <div class="meta">Engineering note</div>
+        <p>Syncropy's pairing relay (<code>relay-worker/</code>, a Cloudflare Durable Object) is
+        deliberately a dumb pipe: it forwards whatever WebSocket messages two paired peers send each
+        other and never inspects their content. For the screen-pairing demo at
+        <a href="connect.html">/connect.html</a>, that means the relay only ever sees a WebRTC
+        signaling handshake (SDP offer/answer, ICE candidates) - the actual screen share travels
+        peer-to-peer between the two browsers once that handshake completes, over an encrypted
+        WebRTC media channel the relay is never part of.</p>
+        <p>There's no shared server secret for the public pairing path either: a room is just a
+        high-entropy, client-generated code, kept in its own Durable Object namespace so it can never
+        collide with the separately-authenticated <code>/relay/:room</code> path. That's what "zero-trust"
+        means here in concrete terms, not a marketing label - see the relay's own source for the
+        exact routing.</p>
+        <p>Honest current limits, in case you're evaluating this: there's no TURN relay fallback yet
+        (pairing across two strict/symmetric NATs can fail to find a direct path), and remote
+        <em>control</em> - keyboard/mouse input, not just viewing - isn't built. Both are real,
+        specific next steps, not vague roadmap items.</p>
     </div>
 </body>
 </html>

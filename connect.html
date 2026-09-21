@@ -93,6 +93,21 @@
   .hidden { display: none !important; }
   .note { font-size: 0.8rem; color: var(--text-muted); margin-top: 18px; line-height: 1.5; }
   footer { text-align: center; margin-top: 30px; }
+  .chat { margin-top: 16px; display: none; }
+  .chat-log {
+    height: 140px;
+    overflow-y: auto;
+    background: rgba(0,0,0,0.45);
+    border: 1px solid var(--glass-border);
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 0.85rem;
+    margin-bottom: 10px;
+  }
+  .chat-log .msg { margin-bottom: 6px; word-break: break-word; }
+  .chat-log .msg .who { color: var(--accent); font-weight: 600; margin-right: 6px; }
+  .chat-row { display: flex; gap: 8px; }
+  .chat-row input { margin-bottom: 0; flex: 1; }
 </style>
 </head>
 <body>
@@ -119,6 +134,13 @@
         </div>
       </div>
       <video id="host-preview" playsinline autoplay muted></video>
+      <div class="chat" id="host-chat">
+        <div class="chat-log" id="host-chat-log"></div>
+        <div class="chat-row">
+          <input type="text" id="host-chat-input" placeholder="Message the viewer&hellip;" maxlength="500">
+          <button onclick="sendChat('host')">Send</button>
+        </div>
+      </div>
     </div>
 
     <div id="view-panel" class="hidden">
@@ -129,6 +151,13 @@
         <span class="status" id="view-status"></span>
       </div>
       <video id="view-video" playsinline autoplay></video>
+      <div class="chat" id="view-chat">
+        <div class="chat-log" id="view-chat-log"></div>
+        <div class="chat-row">
+          <input type="text" id="view-chat-input" placeholder="Message the host&hellip;" maxlength="500">
+          <button onclick="sendChat('view')">Send</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -136,10 +165,12 @@
     This is a real, working MVP pairing tool built on Syncropy's live relay
     (<code>syncropy-relay.johnmobley99.workers.dev</code>) — not a mockup. It handles the core
     "connect two devices" loop, including a shareable link (<code>?room=</code>) that auto-connects
-    the viewer side, not just a code to retype; full remote *control* (keyboard/mouse input relay) is
-    a later step, not part of this pass. ICE candidate discovery uses two public STUN servers
-    (Cloudflare's and Google's) for NAT traversal redundancy — the relay itself never touches your
-    screen, and once peers connect, media flows directly between browsers. Known honest limitation:
+    the viewer side, not just a code to retype, and a text chat channel (a WebRTC DataChannel carried
+    over the same peer connection as the video, never touching the relay) so the two sides can talk
+    without a phone call; full remote *control* (keyboard/mouse input relay) is a later step, not part
+    of this pass. ICE candidate discovery uses two public STUN servers (Cloudflare's and Google's) for
+    NAT traversal redundancy — the relay itself never touches your screen or your messages, and once
+    peers connect, media and chat both flow directly between browsers. Known honest limitation:
     there is no TURN relay fallback yet, so pairing across two strict/symmetric NATs (common on
     locked-down corporate networks — this venture's actual target customer) can still fail to find a
     direct path; a TURN server is the real fix and hasn't been built.
@@ -179,6 +210,48 @@ function copyLink() {
   navigator.clipboard.writeText(link).catch(() => {});
 }
 
+// Text chat rides a WebRTC DataChannel on the SAME peer connection as the
+// video - established via the SDP already being exchanged for screen
+// sharing, so it needs no relay/server changes and never touches the relay:
+// once the peer connection is up, chat messages flow directly between the
+// two browsers, same as the video.
+const chatChannels = { host: null, view: null };
+
+function wireChat(side, channel) {
+  chatChannels[side] = channel;
+  const box = document.getElementById(side + '-chat');
+  const log = document.getElementById(side + '-chat-log');
+  const input = document.getElementById(side + '-chat-input');
+  channel.addEventListener('open', () => { box.style.display = 'block'; input.disabled = false; });
+  channel.addEventListener('close', () => { input.disabled = true; });
+  channel.addEventListener('message', (e) => appendChatLine(log, side === 'host' ? 'viewer' : 'host', e.data));
+  input.disabled = true;
+  input.addEventListener('keydown', (e) => { if (e.key === 'Enter') sendChat(side); });
+}
+
+function appendChatLine(log, who, text) {
+  const line = document.createElement('div');
+  line.className = 'msg';
+  const whoEl = document.createElement('span');
+  whoEl.className = 'who';
+  whoEl.textContent = who + ':';
+  line.appendChild(whoEl);
+  line.appendChild(document.createTextNode(text));
+  log.appendChild(line);
+  log.scrollTop = log.scrollHeight;
+}
+
+function sendChat(side) {
+  const channel = chatChannels[side];
+  if (!channel || channel.readyState !== 'open') return;
+  const input = document.getElementById(side + '-chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  channel.send(text);
+  appendChatLine(document.getElementById(side + '-chat-log'), 'you', text);
+  input.value = '';
+}
+
 async function startHost() {
   const btn = document.getElementById('host-start');
   btn.disabled = true;
@@ -211,6 +284,7 @@ async function startHost() {
     offered = true;
     pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
     localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    wireChat('host', pc.createDataChannel('chat'));
     pc.onicecandidate = (e) => {
       if (e.candidate) ws.send(JSON.stringify({ type: 'ice', candidate: e.candidate }));
     };
@@ -263,6 +337,9 @@ async function startViewer() {
   pc.ontrack = (e) => {
     video.srcObject = e.streams[0];
     video.style.display = 'block';
+  };
+  pc.ondatachannel = (e) => {
+    if (e.channel.label === 'chat') wireChat('view', e.channel);
   };
   pc.onconnectionstatechange = () => {
     statusEl.textContent = 'peer connection: ' + pc.connectionState;
